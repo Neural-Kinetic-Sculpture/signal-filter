@@ -1,0 +1,7 @@
+flask
+flask-socketio
+numpy
+pandas
+mne
+eventlet
+gunicorn

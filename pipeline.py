@@ -9,6 +9,7 @@ import os
 
 # Load the sample EEG dataset
 # Load EEG data
+current_dir = os.getcwd()
 eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
 #28 channels of EEG data and 4 channels in the bottom are EOG data
 #channel names
