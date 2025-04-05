@@ -50,4 +50,4 @@ The script provides two types of plots:
 2. **Power Spectral Density (PSD)** plot to analyze frequency components.
 
 ## Libraries needed:
-pip install flask flask-socketio numpy pandas mne eventlet
+pip install flask flask-socketio numpy pandas mne eventlet flask-cors scipy
