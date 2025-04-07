@@ -6,6 +6,29 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import mne
 import os
+from pylsl import StreamInlet, resolve_byprop
+
+
+# Configuration
+BUFFER_SIZE = 500  # Number of samples per batch
+SFREQ = 1000  # Sampling rate (update based on LiveAmp settings)
+LOW_CUTOFF = 1  # High-pass filter cutoff (Hz)
+HIGH_CUTOFF = 50  # Low-pass filter cutoff (Hz)
+
+def connect_to_stream():
+    #Try to connect to the LiveAmp EEG stream.
+    print("Searching for LiveAmp EEG stream...")
+    streams = resolve_byprop('type', 'EEG', timeout=5) 
+    return StreamInlet(streams[0]) if streams else None
+
+# Initial connection
+inlet = connect_to_stream()
+if inlet is None:
+    print("⚠️ No EEG stream found. Please start the LiveAmp stream and restart the script.")
+    exit()
+
+print("✅ Connected to LiveAmp EEG stream!")
+
 
 # Load the sample EEG dataset
 # Load EEG data
