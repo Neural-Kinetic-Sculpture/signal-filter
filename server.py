@@ -17,10 +17,10 @@ thread = None
 def simulate_realistic_alpha_wave():
     # Simulate frequency drift in alpha range
     dominant_freq = round(random.gauss(10.3, 0.6), 2)  # ~10.3 Hz ± 0.6
-    dominant_freq = max(8.0, min(dominant_freq, 13.0))  # Clamp to alpha band
+    dominant_freq = max(8.0, min(dominant_freq, 12.0))  # Clamp to alpha band
 
-    # Simulate PSD (signal power), e.g. 30-50 for active calmness
-    psd = round(random.uniform(30.0, 55.0), 2)
+    # Simulate PSD (signal power), e.g. 0-100
+    psd = round(random.uniform(0.0, 100.0), 2)
 
     # Confidence is ratio of alpha power to total brain power
     confidence = round(random.uniform(0.7, 0.95), 2)
