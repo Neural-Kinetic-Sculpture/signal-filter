@@ -1,1 +1,1 @@
-web: gunicorn -k eventlet -w 1 pipeline:app
+web: gunicorn -k eventlet -w 1 server:app
