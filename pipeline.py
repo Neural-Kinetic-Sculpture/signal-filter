@@ -1,11 +1,18 @@
-# signal processing pipeline
+
+#==============================================================
+#Signal Processing Pipeline for EEG Data
+#==============================================================
+
 
 #Import necessary libraries
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import mne
+import time
+from collections import deque
 import os
+from scipy.signal import welch
 from pylsl import StreamInlet, resolve_byprop
 
 # H-infinity filter class
@@ -25,11 +32,16 @@ class HInfinityFilter:
         self.w = self.w + self.P @ r * y
         return float(y)
 
+
+
 # Configuration
 BUFFER_SIZE = 500  # Number of samples per batch
 SFREQ = 1000  # Sampling rate (update based on LiveAmp settings)
 LOW_CUTOFF = 1  # High-pass filter cutoff (Hz)
 HIGH_CUTOFF = 50  # Low-pass filter cutoff (Hz)
+EEG_CHANNELS = 4      # First 4 channels = EEG
+EOG_CHANNELS = 4       # Last 4 channels = EOG
+
 
 def connect_to_stream():
     #Try to connect to the LiveAmp EEG stream.
@@ -46,15 +58,123 @@ if inlet is None:
 print("✅ Connected to LiveAmp EEG stream!")
 
 
-# Load the sample EEG dataset
+
+# MNE Info setup
+eeg_ch_names = ['Fp1','Fp2','F3','F4']
+eog_ch_names = ['EOG1', 'EOG2', 'EOG3', 'EOG4']
+ch_names = eeg_ch_names + eog_ch_names
+ch_types = ['eeg'] * EEG_CHANNELS + ['eog'] * EOG_CHANNELS
+info = mne.create_info(ch_names=ch_names, sfreq=SFREQ, ch_types=ch_types)
+
+# Create buffer
+eeg_buffer = deque(maxlen=BUFFER_SIZE)
+timestamps = deque(maxlen=BUFFER_SIZE)
+
+# Start real-time processing
+print("Starting real-time EEG filtering... (Press Ctrl+C to stop)")
+#######
+try:
+    while True:  # Infinite loop until manually stopped
+        sample, timestamp = inlet.pull_sample(timeout=1.0)
+
+        if sample is not None:
+            eeg_buffer.append(sample)
+            timestamps.append(timestamp)
+        else:
+            print("⚠️ No data received! Checking connection...")
+            time.sleep(2)  # Wait before retrying
+            inlet = connect_to_stream()  # Attempt reconnection
+            if inlet is None:
+                print("❌ LiveAmp EEG stream lost. Waiting for reconnection...")
+                time.sleep(5)  # Wait before retrying again
+                continue
+
+        # Process when buffer is full
+        if len(eeg_buffer) == BUFFER_SIZE:
+            data = np.array(eeg_buffer).T  # Shape (channels, samples)
+            
+            eeg_data = data[:EEG_CHANNELS, :]
+            eog_data = data[-EOG_CHANNELS:, :]
+
+            #H-infinity Filtering
+            #Insert here
+            # Step 1: Construct EOG-based reference signals
+            VEOG = eog_data[0, :] - eog_data[1, :]  # Vertical eye movement
+            HEOG = eog_data[3, :] - eog_data[2, :]  # Horizontal eye movement
+            drift = np.ones(VEOG.shape)              # Drift/bias component
+            # Step 2: Combine reference signals
+            ref_signals = np.vstack((VEOG, HEOG, drift))  # Shape: (3, N)
+
+            # Step 3: Prepare output array
+            clean_eeg = np.zeros_like(eeg_data)
+
+            # Step 4: Apply H-infinity filter per channel
+            for ch in range(EEG_CHANNELS):
+                hinf = HInfinityFilter(ref_dim=3, gamma=1.15, q=1e-10, p0=0.5)
+                for t in range(eeg_data.shape[1]):
+                    s = eeg_data[ch, t]        # Noisy EEG
+                    r = ref_signals[:, t]      # Reference EOG + drift
+                    clean_eeg[ch, t] = hinf.update(s, r)  # Cleaned signal
+
+
+            # Create MNE Info for just the EEG channels
+            info = mne.create_info(ch_names=eeg_ch_names, sfreq=1000, ch_types='eeg')
+
+            # Create RawArray from cleaned EEG
+            raw_clean = mne.io.RawArray(clean_eeg, info)
+
+            # Apply real-time filtering
+            raw_clean.filter(LOW_CUTOFF, None) # High-pass filter
+            raw_clean.filter(None, HIGH_CUTOFF) # Low-pass filter
+
+            #Robust referencing
+            raw_clean.set_eeg_reference(ref_channels='average', projection=True)
+            raw_clean.apply_proj()
+
+            #Get the average dominant frequency
+            # Step 1: Get filtered EEG data (numpy array of shape [n_channels, n_samples])
+            eeg_data_filtered = raw_clean.get_data()
+
+            # Step 2: Set PSD parameters
+            sfreq = raw_clean.info['sfreq']
+            nperseg = 256  # Number of samples per segment for FFT
+
+            # Step 3: Compute dominant frequency for each channel
+            dominant_freqs = []
+
+            for ch_data in eeg_data_filtered:
+                freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg)
+                valid_band = (freqs >= 1) & (freqs <= 50)
+                freqs = freqs[valid_band]
+                psd = psd[valid_band]
+                # Get the frequency with the max power
+                dom_freq = freqs[np.argmax(psd)]
+                dominant_freqs.append(dom_freq)
+
+
+            average_dominant_freq = np.mean(dominant_freqs)
+            print(f"Average dominant frequency: {average_dominant_freq:.2f} Hz")
+
+
+
+            # Output processed batch timestamp
+            print(f"Processed batch at {time.strftime('%H:%M:%S')}")
+
+except KeyboardInterrupt:
+    print("\nReal-time EEG filtering stopped.")
+########
+
+"""
+
+# 
 # Load EEG data
-current_dir = os.getcwd()
-eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
+#eeg_eog_data = pd.read_csv(r"C: ##INSERT YOUR PATH HERE##", header=None)
 #28 channels of EEG data and 4 channels in the bottom are EOG data
 #channel names
 #remove last 4 rows from eeg_data to only have eeg data
-eeg_data = eeg_eog_data.iloc[:-4,:]
-ch_names =['Fp1','Fp2','F7','F3','Fz','F4','F8','FC5','FC1','FC2','FC6','C3','Cz','C4','CP5','CP1','CP2','CP6',
+eeg_data = eeg_eog_data.iloc[:-4, :]
+eog_data = eeg_eog_data.iloc[-4:, :]
+eeg_ch_names =['Fp1','Fp2','F7','F3','Fz','F4','F8','FC5','FC1','FC2','FC6','C3','Cz','C4','CP5','CP1','CP2','CP6',
            'P7','P3','Pz','P4','P8','PO9','O1','Oz','O2','PO10']
 
 eog_ch_names = ['EOG1', 'EOG2', 'EOG3', 'EOG4']
@@ -119,8 +239,6 @@ plt.show(block=True)
 raw_clean.plot_psd(fmin=1, fmax=50)
 plt.title('Data after High and Low filters PSD Plot')
 plt.show(block=True)
-
-
 #robust referencing
 raw_clean.set_eeg_reference(ref_channels='average', projection=True)
 raw_clean.apply_proj()
@@ -132,3 +250,30 @@ plt.show(block=True)
 raw_clean.plot_psd(fmin=1, fmax=50)
 plt.title('Clean PSD Plot')
 plt.show(block=True)
+
+# Step 1: Get filtered EEG data (numpy array of shape [n_channels, n_samples])
+eeg_data_filtered = raw_clean.get_data()
+
+# Step 2: Set PSD parameters
+sfreq = raw_clean.info['sfreq']
+nperseg = 256  # Number of samples per segment for FFT
+
+# Step 3: Compute dominant frequency for each channel
+dominant_freqs = []
+
+for ch_data in eeg_data_filtered:
+    freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg)
+    valid_band = (freqs >= 1) & (freqs <= 50)
+    freqs = freqs[valid_band]
+    psd = psd[valid_band]
+    # Get the frequency with the max power
+    dom_freq = freqs[np.argmax(psd)]
+    dominant_freqs.append(dom_freq)
+
+
+average_dominant_freq = np.mean(dominant_freqs)
+
+print(f"Average dominant frequency: {average_dominant_freq:.2f} Hz")
+
+
+"""
