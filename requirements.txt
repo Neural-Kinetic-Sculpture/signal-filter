@@ -3,6 +3,9 @@ flask-socketio
 flask-cors
 numpy
 pandas
+matplotlib
 mne
+scipy
+pylsl
 eventlet
 gunicorn
