@@ -51,3 +51,4 @@ The script provides two types of plots:
 
 ## Libraries needed:
 pip install flask flask-socketio numpy pandas mne eventlet flask-cors scipy
+pip install pylsl
