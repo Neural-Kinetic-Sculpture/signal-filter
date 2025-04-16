@@ -24,7 +24,7 @@ EEG_CHANNELS = 4      # First 4 channels = EEG
 EOG_CHANNELS = 4       # Last 4 channels = EOG
 
 # Render server settings
-RENDER_SERVER_URL = "https://signal-filter.onrender.com"
+RENDER_SERVER_URL = "https://signal-filter.onrender.com/receive_eeg_data"
 API_KEY = os.environ['EEG_API_KEY']
 
 # H-infinity filter class
