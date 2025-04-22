@@ -222,6 +222,8 @@ def main():
     # Load the full dataset
     eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
 
+    # Initialize temporal buffer
+    smoothing_buffer = deque(maxlen=BUFFER_SIZE)
     
     # Split EEG and EOG data
     eeg_data = eeg_eog_data.iloc[:-4, :].values  # 28 EEG channels
@@ -245,8 +247,8 @@ def main():
         eog_chunk = eog_data[:, start_idx:end_idx]
         
         # Process this chunk
-        result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names)
-        
+        result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, smoothing_buffer)
+
         # Optional: Add a small delay to prevent overwhelming the app
         #time.sleep(0.1)  # Adjust as needed
         
