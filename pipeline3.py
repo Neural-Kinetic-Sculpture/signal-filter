@@ -11,11 +11,16 @@ from numpy.linalg import inv as Inv
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import logging
+
+# Suppress MNE and matplotlib warnings
+mne.set_log_level('WARNING')
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 # Constants
 LOW_CUTOFF = 1.0  # Hz
 HIGH_CUTOFF = 50.0  # Hz
-CHUNK_SIZE = 1000  # Samples per chunk
+CHUNK_SIZE = 768  # Samples per chunk
 SAMPLING_RATE = 1000  # Hz
 BUFFER_SIZE = 5  # 5 chunks = 5 seconds of data
 
@@ -118,14 +123,14 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     raw_clean = mne.io.RawArray(clean_eeg, info)
 
     # High pass filter to remove slow drifts (frequencies below 1 Hz)
-    raw_clean.filter(LOW_CUTOFF, None)
+    raw_clean.filter(LOW_CUTOFF, None,verbose=False)
 
     # Low-pass filter to remove high-frequency noise (above 50 Hz)
-    raw_clean.filter(None, HIGH_CUTOFF)
+    raw_clean.filter(None, HIGH_CUTOFF,verbose=False)
 
     # Apply average reference
-    raw_clean.set_eeg_reference(ref_channels='average', projection=True)
-    raw_clean.apply_proj()
+    raw_clean.set_eeg_reference(ref_channels='average', projection=True, verbose=False)
+    raw_clean.apply_proj(verbose=False)
 
     # Get filtered EEG data
     eeg_data_filtered = raw_clean.get_data()
@@ -202,6 +207,12 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         wave_type = classify_wave(average_dominant_freq)
 
         # Prepare data for sending to Render server
+
+        print(f"These are the smoothed powers: {smoothed_powers}")
+        print(f"  ")
+
+        print(f"Dominant_band {dominant_band} and intensity {smoothed_powers[dominant_band]}")
+
         eeg_data_to_send = {
             "wave_type": wave_type,
             "dominant_freq": float(average_dominant_freq),
@@ -220,10 +231,8 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
 
 def main():
     # Load the full dataset
-    eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
+    eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Performance_041022\Subject2\EEG\D2_EEG.csv", header=None)
 
-    # Initialize temporal buffer
-    smoothing_buffer = deque(maxlen=BUFFER_SIZE)
     
     # Split EEG and EOG data
     eeg_data = eeg_eog_data.iloc[:-4, :].values  # 28 EEG channels
@@ -245,10 +254,11 @@ def main():
         # Extract current chunk
         eeg_chunk = eeg_data[:, start_idx:end_idx]
         eog_chunk = eog_data[:, start_idx:end_idx]
-        
+
+        smoothing_buffer = deque(maxlen=BUFFER_SIZE)
         # Process this chunk
         result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, smoothing_buffer)
-
+        
         # Optional: Add a small delay to prevent overwhelming the app
         #time.sleep(0.1)  # Adjust as needed
         
