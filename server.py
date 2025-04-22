@@ -82,8 +82,9 @@ def receive_eeg_data():
             latest_eeg_data = {
                 "wave_type": data.get("wave_type", "unknown"),
                 "dominant_freq": data.get("dominant_freq", 0),
+                "dominant_band": data.get("dominant_band", "unknown"),
+                "intensity": data.get("intensity", 0),
                 "psd": data.get("psd", 0),
-                "confidence": data.get("confidence", 0.85),
                 "timestamp": last_real_data_time
             }
             
@@ -113,6 +114,8 @@ def handle_connect():
         default_data = {
             "wave_type": "none",
             "dominant_freq": 0,
+            "dominant_band": "none",
+            "intensity": 0,
             "psd": 0,
             "timestamp": time.time(),
             "confidence": 0.0
