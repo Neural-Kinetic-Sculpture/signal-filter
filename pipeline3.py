@@ -231,8 +231,8 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
 
 def main():
     # Load the full dataset
-    eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Performance_041022\Subject2\EEG\D2_EEG.csv", header=None)
-
+    # eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
+    eeg_eog_data = pd.read_csv(os.path.join(os.getcwd(), "D1_EEG.csv"), header=None)
     
     # Split EEG and EOG data
     eeg_data = eeg_eog_data.iloc[:-4, :].values  # 28 EEG channels

@@ -146,6 +146,13 @@ def get_status():
         "last_real_data": time.time() - last_real_data_time
     })
 
+@socketio.on('control_command')
+def handle_control_command(data):
+    print(f"Received control command: {data}")
+        
+    # Broadcast to ESP32
+    socketio.emit('control_command', data)
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
