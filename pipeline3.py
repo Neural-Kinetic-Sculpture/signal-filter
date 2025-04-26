@@ -58,6 +58,7 @@ def send_data_to_render(data):
         )
         if response.status_code == 200:
             print(f"✅ Data sent to cloud server: {data['dominant_freq']:.2f} Hz")
+            print(" ")
         else:
             print(f"⚠️ Error sending data to cloud server: {response.status_code}")
     except Exception as e:
@@ -125,10 +126,10 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     raw_clean = mne.io.RawArray(clean_eeg, info)
 
     # High pass filter to remove slow drifts (frequencies below 1 Hz)
-    raw_clean.filter(LOW_CUTOFF, None,verbose=False)
+    raw_clean.filter(LOW_CUTOFF, None,verbose="ERROR")
 
     # Low-pass filter to remove high-frequency noise (above 50 Hz)
-    raw_clean.filter(None, HIGH_CUTOFF,verbose=False)
+    raw_clean.filter(None, HIGH_CUTOFF,verbose="ERROR")
 
     # Apply average reference
     raw_clean.set_eeg_reference(ref_channels='average', projection=True, verbose=False)
@@ -212,7 +213,7 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         # Prepare data for sending to Render server
 
         print(f"These are the smoothed powers: {smoothed_powers}")
-        print(f"  ")
+       
 
         print(f"Dominant_band {dominant_band} and intensity {smoothed_powers[dominant_band]}")
 
