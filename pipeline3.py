@@ -79,14 +79,16 @@ def classify_wave(freq):
     
 def calculate_band_powers(freqs, psd):
     bands = {
-        'delta': (0.5, 4),
+        #'delta': (0.5, 4),
         'theta': (4, 8),
         'alpha': (8, 12),
         'beta': (12, 30),
         'gamma': (30, 50)
     }
     band_powers = {}
-    total_power = np.trapz(psd, freqs)
+    #total_power = np.trapz(psd, freqs)
+    mask = (freqs >= 4) & (freqs <= 50)
+    total_power = np.trapz(psd[mask], freqs[mask])
     
     for band, (low, high) in bands.items():
         mask = (freqs >= low) & (freqs <= high)
@@ -146,7 +148,7 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
 
     for ch_data in eeg_data_filtered:
         freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg)
-        valid_band = (freqs >= 1) & (freqs <= 50)
+        valid_band = (freqs >= 4) & (freqs <= 50)
         freqs = freqs[valid_band]
         psd = psd[valid_band]
         # Get the frequency with the max power
@@ -180,7 +182,7 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
 
     # Average across channels
     avg_band_powers = {
-        'delta': np.mean([bp['delta'] for bp in all_band_powers]),
+        #'delta': np.mean([bp['delta'] for bp in all_band_powers]),
         'theta': np.mean([bp['theta'] for bp in all_band_powers]),
         'alpha': np.mean([bp['alpha'] for bp in all_band_powers]),
         'beta': np.mean([bp['beta'] for bp in all_band_powers]),
@@ -263,7 +265,7 @@ def main():
         end_idx = min(start_idx + CHUNK_SIZE, total_columns)
         
         print(f"Processing samples {start_idx} to {end_idx} of {total_columns}")
-         count = count +1;
+        count = count +1;
         print(f"This would be {count} seconds")
         
         # Initialize arrays for this chunk
