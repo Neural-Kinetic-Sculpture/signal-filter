@@ -27,6 +27,7 @@ This repository contains a signal processing pipeline for EEG data analysis usin
 Ensure you have the following dependencies installed:
 ```bash
 pip install flask flask-socketio numpy pandas mne eventlet flask-cors scipy pylsl
+pip install scikit-learn
 ```
 
 ## Server Setup

@@ -40,11 +40,16 @@ def background_broadcast():
             
             # Create default data with current timestamp
             default_data = {
-                "wave_type": "none",
-                "dominant_freq": 0,
-                "psd": 0,
-                "timestamp": current_time,
-                "confidence": 0.0
+                "alpha_band": 0,
+                "beta_band": 0,
+                "theta_band": 0,
+                "delta_band": 0,
+                "gamma_band": 0,
+                "dominant_band": "none",
+                "alpha_beta_ratio": 0,
+                "alpha_delta_ratio": 0,
+                "peak_alpha_freq": 0,
+                "timestamp": time.time(),
             }
             
             # Only broadcast if we have clients connected
@@ -80,14 +85,18 @@ def receive_eeg_data():
             
             # Update our latest data
             latest_eeg_data = {
-                "wave_type": data.get("wave_type", "unknown"),
-                "dominant_freq": data.get("dominant_freq", 0),
-                "dominant_band": data.get("dominant_band", "unknown"),
-                "intensity": data.get("intensity", 0),
-                "psd": data.get("psd", 0),
-                "timestamp": last_real_data_time
+                "alpha_band": data.get("alpha_band", 0),
+                "beta_band": data.get("beta_band", 0),
+                "theta_band": data.get("theta_band", 0),
+                "delta_band": data.get("delta_band", 0),
+                "gamma_band": data.get("gamma_band", 0),
+                "dominant_band": data.get("dominant_band", 0),
+                "alpha_beta_ratio": data.get("alpha_beta_ratio", 0),
+                "alpha_delta_ratio": data.get("alpha_delta_ratio", 0),
+                "peak_alpha_freq": data.get("peak_alpha_freq", 0),
+                "timestamp": last_real_data_time,
             }
-            
+
             # Broadcast to all connected clients
             socketio.emit('eeg_data', json.dumps(latest_eeg_data))
             return jsonify({"status": "success"})
@@ -112,14 +121,17 @@ def handle_connect():
     if broadcasting_default:
         # Send default data
         default_data = {
-            "wave_type": "none",
-            "dominant_freq": 0,
-            "dominant_band": "none",
-            "intensity": 0,
-            "psd": 0,
-            "timestamp": time.time(),
-            "confidence": 0.0
-        }
+                "alpha_band": 0,
+                "beta_band": 0,
+                "theta_band": 0,
+                "delta_band": 0,
+                "gamma_band": 0,
+                "dominant_band": "none",
+                "alpha_beta_ratio": 0,
+                "alpha_delta_ratio": 0,
+                "peak_alpha_freq": 0,
+                "timestamp": time.time(),
+            }
         socketio.emit('eeg_data', json.dumps(default_data))
     else:
         # Send latest real data
