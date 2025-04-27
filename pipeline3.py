@@ -239,58 +239,31 @@ def main():
     # Define channel names
     eeg_ch_names = ['Fp1','Fp2','F7','F3','Fz','F4','F8','FC5','FC1','FC2','FC6','C3','Cz','C4','CP5','CP1','CP2','CP6',
                'P7','P3','Pz','P4','P8','PO9','O1','Oz','O2','PO10']
-    # File paths
-    eeg_path = os.path.join(os.getcwd(), "D1_EEG.csv")
-    eog_path = os.path.join(os.getcwd(), "D1_EOG.csv")
     
-    # First, determine the number of rows (channels) and total columns (time points)
-    with open(eeg_path, 'r') as f:
-        eeg_rows = sum(1 for _ in f)
+    eeg_eog_data = pd.read_csv(os.path.join(os.getcwd(), "D1_EEG_EOG.csv"), header=None)
     
-    with open(eeg_path, 'r') as f:
-        first_line = f.readline().strip()
-        total_columns = len(first_line.split(','))
-    
-    with open(eog_path, 'r') as f:
-        eog_rows = sum(1 for _ in f)
-    
-    print(f"EEG data: {eeg_rows} channels x {total_columns} time points")
-    print(f"EOG data: {eog_rows} channels")
+    # Split EEG and EOG data
+
+    eeg_data = eeg_eog_data.iloc[:-4, :].values  # 28 EEG channels
+    eog_data = eeg_eog_data.iloc[-4:, :].values  # 4 EOG channels
+ 
+    total_samples = eeg_data.shape[1]
     
     # Initialize smoothing buffer
     smoothing_buffer = deque(maxlen=BUFFER_SIZE)
     count =0;
     
     # Process data in chunks of columns (time points)
-    for start_idx in range(0, total_columns, CHUNK_SIZE):
-        end_idx = min(start_idx + CHUNK_SIZE, total_columns)
+    for start_idx in range(0, total_samples, CHUNK_SIZE):
+        end_idx = min(start_idx + CHUNK_SIZE, total_samples)
         
-        print(f"Processing samples {start_idx} to {end_idx} of {total_columns}")
+        print(f"Processing samples {start_idx} to {end_idx} of {total_samples}")
+        # Extract current chunk
+        eeg_chunk = eeg_data[:, start_idx:end_idx]
+        eog_chunk = eog_data[:, start_idx:end_idx]
         count = count +1;
         print(f"This would be {count} seconds")
-        
-        # Initialize arrays for this chunk
-        eeg_chunk = np.zeros((eeg_rows, end_idx - start_idx))
-        eog_chunk = np.zeros((eog_rows, end_idx - start_idx))
-        
-        # Read EEG data for this chunk
-        with open(eeg_path, 'r') as f:
-            for i, line in enumerate(f):
-                if i < eeg_rows:  # Make sure we don't exceed the number of rows
-                    values = line.strip().split(',')
-                    if len(values) >= end_idx:  # Make sure the row has enough columns
-                        chunk_values = [float(values[j]) for j in range(start_idx, end_idx)]
-                        eeg_chunk[i, :] = chunk_values
-        
-        # Read EOG data for this chunk
-        with open(eog_path, 'r') as f:
-            for i, line in enumerate(f):
-                if i < eog_rows:  # Make sure we don't exceed the number of rows
-                    values = line.strip().split(',')
-                    if len(values) >= end_idx:  # Make sure the row has enough columns
-                        chunk_values = [float(values[j]) for j in range(start_idx, end_idx)]
-                        eog_chunk[i, :] = chunk_values
-                        
+
         # Process this chunk
         result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, smoothing_buffer)
         
