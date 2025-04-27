@@ -253,25 +253,33 @@ def main():
     smoothing_buffer = deque(maxlen=BUFFER_SIZE)
     count =0;
     
+    start_time = time.time()  # Record start time for timing control
     # Process data in chunks of columns (time points)
     for start_idx in range(0, total_samples, CHUNK_SIZE):
         end_idx = min(start_idx + CHUNK_SIZE, total_samples)
+
+        actual_chunk_size = end_idx - start_idx
+        actual_chunk_duration = actual_chunk_size / SAMPLING_RATE
         
-        print(f"Processing samples {start_idx} to {end_idx} of {total_samples}")
+        #print(f"Processing samples {start_idx} to {end_idx} of {total_samples}")
         # Extract current chunk
         eeg_chunk = eeg_data[:, start_idx:end_idx]
         eog_chunk = eog_data[:, start_idx:end_idx]
         count = count +1;
-        print(f"This would be {count} seconds")
+        #print(f"This would be {count} seconds")
 
         # Process this chunk
         result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, smoothing_buffer)
         
-        # Optional: Add a small delay to prevent overwhelming the app
-        #time.sleep(0.1)  # Adjust as needed
+        # Calculation made on the number of samples and what is its time equivalent (1000 samples at 1000 Hz)
+        processing_time = time.time() - chunk_start_time
+        time_to_wait = actual_chunk_duration - processing_time
+        if time_to_wait > 0:
+            #print(f"Waiting {time_to_wait:.2f} seconds to maintain real-time processing")
+            time.sleep(time_to_wait)
+            
+    #print(f"Finished processing all EEG data. Total time: {time.time() - start_time:.2f} seconds")
         
-        # You could also add logic here to wait for confirmation from the app
-        # before processing the next chunk
 
 if __name__ == "__main__":
     main()
