@@ -256,6 +256,7 @@ def main():
     start_time = time.time()  # Record start time for timing control
     # Process data in chunks of columns (time points)
     for start_idx in range(0, total_samples, CHUNK_SIZE):
+        chunk_start_time = time.time()
         end_idx = min(start_idx + CHUNK_SIZE, total_samples)
 
         actual_chunk_size = end_idx - start_idx
