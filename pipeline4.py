@@ -20,7 +20,7 @@ logging.getLogger('matplotlib').setLevel(logging.WARNING)
 # Constants
 LOW_CUTOFF = 3.0  # Hz
 HIGH_CUTOFF = 50.0  # Hz
-CHUNK_SIZE = 768  # Samples per chunk
+CHUNK_SIZE = 1000  # Samples per chunk
 SAMPLING_RATE = 1000  # Hz
 BUFFER_SIZE = 5  # 5 chunks = 5 seconds of data
 
@@ -57,7 +57,7 @@ def send_data_to_render(data):
             timeout=5 # 5 second timeout
         )
         if response.status_code == 200:
-            print(f"✅ Data sent to cloud server: {data['dominant_freq']:.2f} Hz")
+            print(f"✅ Data sent to cloud server: {data['alpha_band']:.2f} Hz")
         else:
             print(f"⚠️ Error sending data to cloud server: {response.status_code}")
     except Exception as e:
@@ -79,14 +79,16 @@ def classify_wave(freq):
     
 def calculate_band_powers(freqs, psd):
     bands = {
-        'delta': (0.5, 4),
+        # 'delta': (0.5, 4),
         'theta': (4, 8),
         'alpha': (8, 12),
         'beta': (12, 30),
         'gamma': (30, 50)
     }
     band_powers = {}
-    total_power = np.trapezoid(psd, freqs)
+    # total_power = np.trapezoid(psd, freqs)
+    mask = (freqs >= 4) & (freqs <= 50)
+    total_power = np.trapezoid(psd[mask], freqs[mask])
     
     for band, (low, high) in bands.items():
         mask = (freqs >= low) & (freqs <= high)
@@ -125,20 +127,20 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     # High pass filter to remove slow drifts (frequencies below 1 Hz)
     raw_clean.filter(LOW_CUTOFF, None,verbose=False, method='iir')
 
-    # Add ICA preprocessing here
-    ica = mne.preprocessing.ICA(n_components=min(15, len(eeg_ch_names)-1), 
-                            random_state=42, 
-                            method='fastica')
+    # ICA preprocessing here
+    # ica = mne.preprocessing.ICA(n_components=min(15, len(eeg_ch_names)-1), 
+    #                         random_state=42, 
+    #                         method='fastica')
 
-    # Fit ICA on the data
-    ica.fit(raw_clean, verbose=False)
+    # # Fit ICA on the data
+    # ica.fit(raw_clean, verbose=False)
 
-    # Instead of automatic EOG detection, manually exclude the first 2 components
-    # These often capture the highest variance artifacts like movement
-    ica.exclude = [0, 1]  # Usually first components capture movement artifacts
+    # # Instead of automatic EOG detection, manually exclude the first 2 components
+    # # These often capture the highest variance artifacts like movement
+    # ica.exclude = [0, 1]  # Usually first components capture movement artifacts
 
-    # Apply ICA correction
-    ica.apply(raw_clean, verbose=False)
+    # # Apply ICA correction
+    # ica.apply(raw_clean, verbose=False)
 
     # Low-pass filter to remove high-frequency noise (above 50 Hz)
     raw_clean.filter(None, HIGH_CUTOFF,verbose=False, method='iir')
@@ -153,19 +155,36 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     # Compute PSD and dominant frequency
     sfreq = raw_clean.info['sfreq']
     nperseg = min(256, eeg_chunk.shape[1])  # Adjust segment size for short chunks
+
     peak_alpha_freqs = []
+    all_psds = []
+    normalized_psds = []
 
     # Calculate the peak alpha frequency for each channel
     for ch_data in eeg_data_filtered:
         freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg, noverlap=min(nperseg//2, nperseg-1))
+        valid_band = (freqs >= 4) & (freqs <= 50)
         alpha_mask = (freqs >= 8) & (freqs <= 12)
-        
+
+        # Calculate the peak alpha frequency
         if np.any(alpha_mask):
             alpha_freqs = freqs[alpha_mask]
             alpha_psd = psd[alpha_mask]
             
             peak_freq = alpha_freqs[np.argmax(alpha_psd)]
             peak_alpha_freqs.append(peak_freq)
+
+        psd = psd[valid_band]
+        # Calculate normalized PSD
+        if len(psd) > 0:
+            # Store the full PSDs for later normalization
+            all_psds.append(psd)
+            
+            # Normalize PSD to range 0-100
+            psd_min = np.min(psd)
+            psd_max = np.max(psd)
+            psd_norm = 100 * (psd - psd_min) / (psd_max - psd_min + 1e-10)  # avoid division by 0
+            normalized_psds.append(psd_norm)
 
     average_peak_alpha_freq = np.mean(peak_alpha_freqs) if peak_alpha_freqs else 0
 
@@ -201,20 +220,22 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         for band in avg_band_powers.keys()
     }
  
+    avg_normalized_psd = np.mean([np.mean(psd) for psd in normalized_psds]) if normalized_psds else 0
     dominant_band = max(smoothed_powers, key=smoothed_powers.get)
-    print(f"These are the smoothed powers: {smoothed_powers}")
-    print(f"Dominant_band {dominant_band} and intensity {smoothed_powers[dominant_band]}\n")
+    print(f"SMOOTHED POWERS:\n {smoothed_powers}\n")
+    print(f"DOMINANT BAND: {dominant_band} and INTENSITY: {smoothed_powers[dominant_band]}\n\n")
 
     eeg_data_to_send = {
-        "alpha_band": smoothed_powers['alpha'],
-        "beta_band": smoothed_powers['beta'],
-        "theta_band": smoothed_powers['theta'],
-        "delta_band": smoothed_powers['delta'],
-        "gamma_band": smoothed_powers['gamma'],
+        "alpha_band": smoothed_powers['alpha'] * 100,
+        "beta_band": smoothed_powers['beta'] * 100,
+        "theta_band": smoothed_powers['theta'] * 100,
+        "delta_band": smoothed_powers['delta'] * 100,
+        "gamma_band": smoothed_powers['gamma'] * 100,
         "dominant_band": dominant_band,
-        "alpha_beta_ratio": smoothed_powers['alpha'] / smoothed_powers['beta'],
-        "alpha_delta_ratio": smoothed_powers['alpha'] / smoothed_powers['delta'],
+        "alpha_beta_ratio": smoothed_powers['alpha'] / max(smoothed_powers['beta'], 1e-10),  # Prevent division by zero
+        "alpha_delta_ratio": smoothed_powers['alpha'] / max(smoothed_powers['delta'], 1e-10),  # Prevent division by zero
         "peak_alpha_freq": average_peak_alpha_freq,
+        "psd": float(avg_normalized_psd),
         "timestamp": time.time(),
     }
     
@@ -224,7 +245,6 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     
 def main():
     # Load the full dataset
-    # eeg_eog_data = pd.read_csv(r"C:\Users\carol\Documents\VSPrograms\Signal_Processing\Rehearsal_031322\Subject1\EEG\D1_EEG_EOG.csv", header=None)
     eeg_eog_data = pd.read_csv(os.path.join(os.getcwd(), "D1_EEG_EOG.csv"), header=None)
     
     # Split EEG and EOG data
@@ -234,31 +254,42 @@ def main():
     # Define channel names
     eeg_ch_names = ['Fp1','Fp2','F7','F3','Fz','F4','F8','FC5','FC1','FC2','FC6','C3','Cz','C4','CP5','CP1','CP2','CP6',
                'P7','P3','Pz','P4','P8','PO9','O1','Oz','O2','PO10']
-    # eeg_ch_names = ['Fp1','Fp2','F7','F3','Fz','F4','F8','FC5','FC1','FC2','FC6','C3','Cz','C4','CP5','CP1','CP2','CP6',
-    #         'P7','P3','Pz','P4','P8','PO9']
     
     # Calculate the total number of samples
     total_samples = eeg_data.shape[1]
     print("TOTAL SAMPLES: ", total_samples)
     
-    # Process data in chunks of 1000 samples
+    # Initialize smoothing buffer
+    smoothing_buffer = deque(maxlen=BUFFER_SIZE)
+    count =0
+    
+    start_time = time.time()  # Record start time for timing control
+    # Process data in chunks of columns (time points)
     for start_idx in range(0, total_samples, CHUNK_SIZE):
+        chunk_start_time = time.time()
         end_idx = min(start_idx + CHUNK_SIZE, total_samples)
+
+        actual_chunk_size = end_idx - start_idx
+        actual_chunk_duration = actual_chunk_size / SAMPLING_RATE
         
-        # print(f"Processing samples {start_idx} to {end_idx} of {total_samples}")
-        
+        #print(f"Processing samples {start_idx} to {end_idx} of {total_samples}")
         # Extract current chunk
         eeg_chunk = eeg_data[:, start_idx:end_idx]
         eog_chunk = eog_data[:, start_idx:end_idx]
+        count = count +1
+        #print(f"This would be {count} seconds")
 
-        smoothing_buffer = deque(maxlen=BUFFER_SIZE)
         # Process this chunk
         result = process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, smoothing_buffer)
-
-        # Simulate real-time processing
-        # If CHUNK_SIZE = 768 and SAMPLING_RATE = 1000, then each chunk represents 0.768 seconds
-        time_to_sleep = CHUNK_SIZE / SAMPLING_RATE
-        time.sleep(time_to_sleep)  # Sleep for the duration represented by this chunk
+        
+        # Calculation made on the number of samples and what is its time equivalent (1000 samples at 1000 Hz)
+        processing_time = time.time() - chunk_start_time
+        time_to_wait = actual_chunk_duration - processing_time
+        if time_to_wait > 0:
+            #print(f"Waiting {time_to_wait:.2f} seconds to maintain real-time processing")
+            time.sleep(time_to_wait)
+            
+    #print(f"Finished processing all EEG data. Total time: {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()

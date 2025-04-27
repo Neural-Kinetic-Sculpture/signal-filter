@@ -18,12 +18,18 @@ broadcasting_default = True
 
 # Store the latest EEG data
 latest_eeg_data = {
-    "wave_type": "none",
-    "dominant_freq": 0,
+    "alpha_band": 0,
+    "beta_band": 0,
+    "theta_band": 0,
+    "delta_band": 0,
+    "gamma_band": 0,
+    "dominant_band": "none",
+    "alpha_beta_ratio": 0,
+    "alpha_delta_ratio": 0,
+    "peak_alpha_freq": 0,
     "psd": 0,
     "timestamp": time.time(),
-    "confidence": 0.0  # Default value
-}
+    }
 
 def background_broadcast():
     """Background thread that broadcasts default data when no real data is coming in"""
@@ -49,6 +55,7 @@ def background_broadcast():
                 "alpha_beta_ratio": 0,
                 "alpha_delta_ratio": 0,
                 "peak_alpha_freq": 0,
+                "psd": 0,
                 "timestamp": time.time(),
             }
             
@@ -94,6 +101,7 @@ def receive_eeg_data():
                 "alpha_beta_ratio": data.get("alpha_beta_ratio", 0),
                 "alpha_delta_ratio": data.get("alpha_delta_ratio", 0),
                 "peak_alpha_freq": data.get("peak_alpha_freq", 0),
+                "psd": data.get("psd", 0),
                 "timestamp": last_real_data_time,
             }
 
