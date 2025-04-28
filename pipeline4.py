@@ -79,16 +79,16 @@ def classify_wave(freq):
     
 def calculate_band_powers(freqs, psd):
     bands = {
-        # 'delta': (0.5, 4),
+        'delta': (0.5, 4),
         'theta': (4, 8),
         'alpha': (8, 12),
         'beta': (12, 30),
         'gamma': (30, 50)
     }
     band_powers = {}
-    # total_power = np.trapezoid(psd, freqs)
-    mask = (freqs >= 4) & (freqs <= 50)
-    total_power = np.trapezoid(psd[mask], freqs[mask])
+    total_power = np.trapezoid(psd, freqs)
+    # mask = (freqs >= 4) & (freqs <= 50)
+    # total_power = np.trapezoid(psd[mask], freqs[mask])
     
     for band, (low, high) in bands.items():
         mask = (freqs >= low) & (freqs <= high)
@@ -229,7 +229,7 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         "alpha_band": smoothed_powers['alpha'] * 100,
         "beta_band": smoothed_powers['beta'] * 100,
         "theta_band": smoothed_powers['theta'] * 100,
-        "delta_band": smoothed_powers['delta'] * 100,
+        "delta_band": smoothed_powers['theta'] * 100,
         "gamma_band": smoothed_powers['gamma'] * 100,
         "dominant_band": dominant_band,
         "alpha_beta_ratio": smoothed_powers['alpha'] / max(smoothed_powers['beta'], 1e-10),  # Prevent division by zero

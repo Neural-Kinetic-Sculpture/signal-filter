@@ -156,6 +156,12 @@ def handle_test(message):
     print(f"Test connection message received: {message}")
     socketio.emit('test_response', '✅ Echo from server')
 
+@app.route('/test_command', methods=['GET'])
+def test_command():
+    """Send a test control command to all clients"""
+    socketio.emit('control_command', "TEST_FROM_SERVER")
+    return jsonify({"status": "command sent"})
+
 @app.route('/status', methods=['GET'])
 def get_status():
     """Endpoint to check server status and data mode"""
@@ -169,9 +175,14 @@ def get_status():
 @socketio.on('control_command')
 def handle_control_command(data):
     print(f"Received control command: {data}")
-        
-    # Broadcast to ESP32
-    socketio.emit('control_command', data)
+    print(f"Type: {type(data)}")
+    print(f"Connected clients: {clients_connected}")
+    
+    # Broadcast to all clients including sender
+    socketio.emit('control_command', data, broadcast=True, include_self=True)
+    
+    # Return acknowledgment
+    return "command received"
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
