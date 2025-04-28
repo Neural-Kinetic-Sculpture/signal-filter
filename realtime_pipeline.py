@@ -90,6 +90,8 @@ def classify_wave(freq):
         return 'gamma'
     else:
         return 'unknown'
+    
+
 def calculate_band_powers(freqs, psd):
     bands = {
         'delta': (0.5, 4),
@@ -107,6 +109,7 @@ def calculate_band_powers(freqs, psd):
         band_powers[band] = band_power / total_power  # Relative power
         
     return band_powers
+
 def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     """Process a chunk of EEG and EOG data."""
     # Step 1: Construct EOG-based reference signals
@@ -135,10 +138,10 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     raw_clean = mne.io.RawArray(clean_eeg, info)
 
     # High pass filter to remove slow drifts (frequencies below 1 Hz)
-    raw_clean.filter(LOW_CUTOFF, None,verbose=False)
+    raw_clean.filter(LOW_CUTOFF, None,verbose=False, method='iir')
 
     # Low-pass filter to remove high-frequency noise (above 50 Hz)
-    raw_clean.filter(None, HIGH_CUTOFF,verbose=False)
+    raw_clean.filter(None, HIGH_CUTOFF,verbose=False, method='iir')
 
     # Apply average reference
     raw_clean.set_eeg_reference(ref_channels='average', projection=True, verbose=False)
@@ -151,25 +154,29 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
     sfreq = raw_clean.info['sfreq']
     nperseg = min(256, eeg_chunk.shape[1])  # Adjust segment size for short chunks
     
-    dominant_freqs = []
+    peak_alpha_freqs = []
     all_psds = []
-    all_freqs = []
     normalized_psds = []
 
+    # Calculate the peak alpha frequency for each channel
     for ch_data in eeg_data_filtered:
-        freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg)
-        valid_band = (freqs >= 1) & (freqs <= 50)
-        freqs = freqs[valid_band]
+        freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg, noverlap=min(nperseg//2, nperseg-1))
+        valid_band = (freqs >= 4) & (freqs <= 50)
+        alpha_mask = (freqs >= 8) & (freqs <= 12)
+
+        # Calculate the peak alpha frequency
+        if np.any(alpha_mask):
+            alpha_freqs = freqs[alpha_mask]
+            alpha_psd = psd[alpha_mask]
+            
+            peak_freq = alpha_freqs[np.argmax(alpha_psd)]
+            peak_alpha_freqs.append(peak_freq)
+
         psd = psd[valid_band]
-        # Get the frequency with the max power
+        # Calculate normalized PSD
         if len(psd) > 0:
             # Store the full PSDs for later normalization
             all_psds.append(psd)
-            all_freqs.append(freqs)
-            
-            # Get the frequency with the max power
-            dom_freq = freqs[np.argmax(psd)]
-            dominant_freqs.append(dom_freq)
             
             # Normalize PSD to range 0-100
             psd_min = np.min(psd)
@@ -177,10 +184,14 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
             psd_norm = 100 * (psd - psd_min) / (psd_max - psd_min + 1e-10)  # avoid division by 0
             normalized_psds.append(psd_norm)
 
+    average_peak_alpha_freq = np.mean(peak_alpha_freqs) if peak_alpha_freqs else 0
+
     # BAND POWERS SECTION--------------------------------------------------------
     all_band_powers = []
     for ch_data in eeg_data_filtered:
-        freqs, psd = welch(ch_data, fs=sfreq, nperseg=1024, noverlap=512)
+        nperseg_bandpower = min(1024, len(ch_data))
+        noverlap_bandpower = min(nperseg_bandpower//2, nperseg_bandpower-1)  # Ensure noverlap < nperseg
+        freqs, psd = welch(ch_data, fs=sfreq, nperseg=nperseg_bandpower, noverlap=noverlap_bandpower)
         valid_band = (freqs >= 1) & (freqs <= 50)
         freqs = freqs[valid_band]
         psd = psd[valid_band]
@@ -188,6 +199,7 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         if len(psd) > 0:
             band_powers = calculate_band_powers(freqs, psd)
             all_band_powers.append(band_powers)
+
 
     # Average across channels
     avg_band_powers = {
@@ -207,39 +219,31 @@ def process_eeg_chunk(eeg_chunk, eog_chunk, eeg_ch_names, buffer):
         for band in avg_band_powers.keys()
     }
  
+    avg_normalized_psd = np.mean([np.mean(psd) for psd in normalized_psds]) if normalized_psds else 0
     dominant_band = max(smoothed_powers, key=smoothed_powers.get)
+    print(f"SMOOTHED POWERS:\n {smoothed_powers}\n")
+    print(f"DOMINANT BAND: {dominant_band} and INTENSITY: {smoothed_powers[dominant_band]}\n\n")
 
-    # Calculate average metrics
-    if dominant_freqs:
-        average_dominant_freq = np.mean(dominant_freqs)
+    eeg_data_to_send = {
+        "alpha_band": smoothed_powers['alpha'] * 100,
+        "beta_band": smoothed_powers['beta'] * 100,
+        "theta_band": smoothed_powers['theta'] * 100,
+        "delta_band": smoothed_powers['theta'] * 100,
+        "gamma_band": smoothed_powers['gamma'] * 100,
+        "dominant_band": dominant_band,
+        "alpha_beta_ratio": smoothed_powers['alpha'] / max(smoothed_powers['beta'], 1e-10),  # Prevent division by zero
+        "alpha_delta_ratio": smoothed_powers['alpha'] / max(smoothed_powers['delta'], 1e-10),  # Prevent division by zero
+        "peak_alpha_freq": average_peak_alpha_freq,
+        "psd": float(avg_normalized_psd),
+        "timestamp": time.time(),
+    }
         
-        avg_normalized_psd = np.mean([np.mean(psd) for psd in normalized_psds]) if normalized_psds else 0
-
-        # Find wave type
-        wave_type = classify_wave(average_dominant_freq)
-
-        # Prepare data for sending to Render server
-
-        print(f"These are the smoothed powers: {smoothed_powers}")
-        print(f"  ")
-
-        print(f"Dominant_band {dominant_band} and intensity {smoothed_powers[dominant_band]}")
-
-        eeg_data_to_send = {
-            "wave_type": wave_type,
-            "dominant_freq": float(average_dominant_freq),
-            'dominant_band': dominant_band,
-            'intensity': smoothed_powers[dominant_band],
-            "psd": float(avg_normalized_psd),
-            "timestamp": time.time()
-        }
+    # Send the processed data to the Render server
+    send_data_to_render(eeg_data_to_send)
         
-        # Send the processed data to the Render server
-        send_data_to_render(eeg_data_to_send)
-        
-        return eeg_data_to_send
+    return eeg_data_to_send
     
-    return None
+
 
 # Initial connection
 inlet = connect_to_stream()
