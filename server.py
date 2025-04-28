@@ -183,18 +183,9 @@ def handle_test(message):
 @app.route('/test_command', methods=['GET'])
 def test_command():
     """Send a test control command to all clients"""
-    socketio.emit('control_command', "TEST_FROM_SERVER")
+    test_array = ["TEST_FROM_SERVER", "0", "0", "5", "1", "100", "FF0000"]
+    socketio.emit('control_command', test_array)
     return jsonify({"status": "command sent"})
-
-@app.route('/status', methods=['GET'])
-def get_status():
-    """Endpoint to check server status and data mode"""
-    return jsonify({
-        "status": "running",
-        "clients_connected": clients_connected,
-        "broadcasting_default": broadcasting_default,
-        "last_real_data": time.time() - last_real_data_time
-    })
 
 @socketio.on('control_command')
 def handle_control_command(data):
@@ -202,17 +193,29 @@ def handle_control_command(data):
     print(f"Type: {type(data)}")
     print(f"Connected clients: {clients_connected}")
     
-    if isinstance(data, str):
+    # Log parsed information if it's an array
+    if isinstance(data, list):
+        try:
+            if len(data) >= 6:
+                row, col, speed, direction, brightness, color = data[:6]
+                print(f"✨ Parsed array command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}, Color: {color}")
+            else:
+                print(f"⚠️ Array command format incorrect, expected at least 6 parameters")
+        except Exception as e:
+            print(f"⚠️ Error parsing array command: {e}")
+    # Backward compatibility for string commands
+    elif isinstance(data, str):
         try:
             parts = data.split()
             if len(parts) >= 6:
                 row, col, speed, direction, brightness, color = parts[:6]
-                print(f"✨ Parsed command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}, Color: {color}%")
+                print(f"✨ Parsed string command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}, Color: {color}")
             else:
                 print(f"⚠️ Command format incorrect, expected at least 6 parameters")
         except Exception as e:
             print(f"⚠️ Error parsing command: {e}")
     
+    # Re-emit the command exactly as received (no transformation)
     socketio.emit('control_command', data)
     
     # Return acknowledgment
