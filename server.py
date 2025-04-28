@@ -184,6 +184,13 @@ def handle_control_command(data):
     # Return acknowledgment
     return "command received"
 
+@app.route('/broadcast_test/<command>', methods=['GET'])
+def broadcast_test(command):
+    """Test endpoint to broadcast a command to all clients"""
+    print(f"Broadcasting test command: {command}")
+    socketio.emit('control_command', command)
+    return jsonify({"status": "command sent", "command": command})
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
