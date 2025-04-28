@@ -189,8 +189,7 @@ def handle_control_command(data):
         except Exception as e:
             print(f"⚠️ Error parsing command: {e}")
     
-    # Broadcast to all clients including sender
-    socketio.emit('control_command', data, broadcast=True, include_self=True)
+    socketio.emit('control_command', data)
     
     # Return acknowledgment
     return "command received"
