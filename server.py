@@ -180,15 +180,12 @@ def handle_control_command(data):
     
     if isinstance(data, str):
         try:
-            # "numPanelsRows numPanelsCols x y speed direction brightness color"
             parts = data.split()
-            if len(parts) >= 8:
-                num_rows, num_cols, x_pos, y_pos, speed, direction, brightness, color = parts[:8]
-                print(f"✨ Parsed command - Grid: [{num_rows}x{num_cols}], Panel: [{x_pos},{y_pos}], "
-                      f"Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, "
-                      f"Brightness: {brightness}%, Color: {color}")
+            if len(parts) >= 5:
+                row, col, speed, direction, brightness = parts[:5]
+                print(f"✨ Parsed command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}%")
             else:
-                print(f"⚠️ Command format incorrect, expected at least 8 parameters")
+                print(f"⚠️ Command format incorrect, expected at least 5 parameters")
         except Exception as e:
             print(f"⚠️ Error parsing command: {e}")
     
