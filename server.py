@@ -5,6 +5,7 @@ import time
 import os
 import json
 import threading
+import random
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", json=json)
@@ -18,17 +19,63 @@ broadcasting_default = True
 
 # Store the latest EEG data
 latest_eeg_data = {
-    "alpha_band": 0,
-    "beta_band": 0,
-    "theta_band": 0,
-    "delta_band": 0,
-    "gamma_band": 0,
+    "alpha_band": -1,
+    "beta_band": -1,
+    "theta_band": -1,
+    "delta_band": -1,
+    "gamma_band": -1,
     "dominant_band": "none",
-    "alpha_beta_ratio": 0,
-    "alpha_delta_ratio": 0,
-    "peak_alpha_freq": 0,
-    "psd": 0,
+    "alpha_beta_ratio": -1,
+    "alpha_delta_ratio": -1,
+    "peak_alpha_freq": -1,
+    "psd": -1,
     "timestamp": time.time(),
+}
+
+def generate_random_band_powers():
+    """Generate random band powers that sum to exactly 100"""
+    # Generate 5 random numbers
+    bands = [random.uniform(5, 40) for _ in range(5)]
+    
+    # Normalize to sum to exactly 100
+    total = sum(bands)
+    normalized_bands = [round((b / total) * 100, 2) for b in bands]
+    
+    # Ensure they sum to exactly 100 (may be slightly off due to rounding)
+    adjustment = 100 - sum(normalized_bands)
+    normalized_bands[0] += adjustment
+    
+    # Determine dominant band index (highest value)
+    dominant_idx = normalized_bands.index(max(normalized_bands))
+    band_names = ["alpha", "beta", "theta", "delta", "gamma"]
+    dominant_band = band_names[dominant_idx]
+    
+    # Calculate ratios
+    alpha_band = normalized_bands[0]
+    beta_band = normalized_bands[1]
+    delta_band = normalized_bands[3]
+    
+    alpha_beta_ratio = round(alpha_band / beta_band, 2) if beta_band > 0 else 0
+    alpha_delta_ratio = round(alpha_band / delta_band, 2) if delta_band > 0 else 0
+    
+    # Random peak alpha frequency between 8-12 Hz
+    peak_alpha_freq = round(random.uniform(8, 12), 2)
+    
+    # Random PSD value
+    psd = round(random.uniform(10, 200), 2)
+    
+    return {
+        "alpha_band": normalized_bands[0],
+        "beta_band": normalized_bands[1],
+        "theta_band": normalized_bands[2],
+        "delta_band": normalized_bands[3],
+        "gamma_band": normalized_bands[4],
+        "dominant_band": dominant_band,
+        "alpha_beta_ratio": alpha_beta_ratio,
+        "alpha_delta_ratio": alpha_delta_ratio,
+        "peak_alpha_freq": peak_alpha_freq,
+        "psd": psd,
+        "timestamp": time.time(),
     }
 
 def background_broadcast():
@@ -44,25 +91,13 @@ def background_broadcast():
                 print("Switching to default data broadcast mode")
                 broadcasting_default = True
             
-            # Create default data with current timestamp
-            default_data = {
-                "alpha_band": 0,
-                "beta_band": 0,
-                "theta_band": 0,
-                "delta_band": 0,
-                "gamma_band": 0,
-                "dominant_band": "none",
-                "alpha_beta_ratio": 0,
-                "alpha_delta_ratio": 0,
-                "peak_alpha_freq": 0,
-                "psd": 0,
-                "timestamp": time.time(),
-            }
+            # Create randomized default data with current timestamp
+            default_data = generate_random_band_powers()
             
             # Only broadcast if we have clients connected
             if clients_connected > 0:
                 socketio.emit('eeg_data', json.dumps(default_data))
-                print("Broadcasting default data")
+                print(f"Broadcasting randomized default data: {default_data['alpha_band']:.1f}α, {default_data['beta_band']:.1f}β, {default_data['theta_band']:.1f}θ, {default_data['delta_band']:.1f}δ, {default_data['gamma_band']:.1f}γ")
         
         # Sleep to control broadcast rate (send every 1 second)
         time.sleep(1)
@@ -127,19 +162,8 @@ def handle_connect():
     
     # Send the current data to newly connected client
     if broadcasting_default:
-        # Send default data
-        default_data = {
-                "alpha_band": 0,
-                "beta_band": 0,
-                "theta_band": 0,
-                "delta_band": 0,
-                "gamma_band": 0,
-                "dominant_band": "none",
-                "alpha_beta_ratio": 0,
-                "alpha_delta_ratio": 0,
-                "peak_alpha_freq": 0,
-                "timestamp": time.time(),
-            }
+        # Send randomized default data
+        default_data = generate_random_band_powers()
         socketio.emit('eeg_data', json.dumps(default_data))
     else:
         # Send latest real data
@@ -181,11 +205,11 @@ def handle_control_command(data):
     if isinstance(data, str):
         try:
             parts = data.split()
-            if len(parts) >= 5:
-                row, col, speed, direction, brightness = parts[:5]
-                print(f"✨ Parsed command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}%")
+            if len(parts) >= 6:
+                row, col, speed, direction, brightness, color = parts[:6]
+                print(f"✨ Parsed command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}, Color: {color}%")
             else:
-                print(f"⚠️ Command format incorrect, expected at least 5 parameters")
+                print(f"⚠️ Command format incorrect, expected at least 6 parameters")
         except Exception as e:
             print(f"⚠️ Error parsing command: {e}")
     
