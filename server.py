@@ -174,22 +174,26 @@ def get_status():
 
 @socketio.on('control_command')
 def handle_control_command(data):
-    print(f"Received control command: {data}")
+    print(f"➡️ Received control command: {data}")
     print(f"Type: {type(data)}")
     print(f"Connected clients: {clients_connected}")
+    
+    if isinstance(data, str):
+        try:
+            parts = data.split()
+            if len(parts) >= 5:
+                row, col, speed, direction, brightness = parts[:5]
+                print(f"✨ Parsed command - Panel: [{row},{col}], Speed: {speed}, Direction: {'up' if direction == '1' else 'down'}, Brightness: {brightness}%")
+            else:
+                print(f"⚠️ Command format incorrect, expected at least 5 parameters")
+        except Exception as e:
+            print(f"⚠️ Error parsing command: {e}")
     
     # Broadcast to all clients including sender
     socketio.emit('control_command', data, broadcast=True, include_self=True)
     
     # Return acknowledgment
     return "command received"
-
-@app.route('/broadcast_test/<command>', methods=['GET'])
-def broadcast_test(command):
-    """Test endpoint to broadcast a command to all clients"""
-    print(f"Broadcasting test command: {command}")
-    socketio.emit('control_command', command)
-    return jsonify({"status": "command sent", "command": command})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
